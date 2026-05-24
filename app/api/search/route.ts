@@ -1,17 +1,91 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
-import { mockProducts } from "@/mockData";
+import { mockProducts, type MockProduct } from "@/mockData";
 
 type SearchIntent = {
   features: string[];
   keywords: string[];
   englishKeywords: string[];
+  searchQueries: string[];
+};
+
+type SerpApiImageResult = {
+  title?: string;
+  original?: string;
+  thumbnail?: string;
+  source?: string;
+  link?: string;
+};
+
+type SerpApiResponse = {
+  images_results?: SerpApiImageResult[];
 };
 
 const fallbackIntent: SearchIntent = {
   features: ["玩具", "可能是可夾取的造型", "手持裝置"],
   keywords: ["藍色 夾取 玩具", "手持 夾夾槍"],
-  englishKeywords: ["blue grabber toy", "toy claw gun"]
+  englishKeywords: ["blue grabber toy", "toy claw gun"],
+  searchQueries: ["blue toy claw grabber", "night market grabber gun toy"]
+};
+
+const parseIntent = (raw: string): SearchIntent => {
+  const parsed = JSON.parse(raw) as Partial<SearchIntent>;
+  return {
+    features: Array.isArray(parsed.features) ? parsed.features : fallbackIntent.features,
+    keywords: Array.isArray(parsed.keywords) ? parsed.keywords : fallbackIntent.keywords,
+    englishKeywords: Array.isArray(parsed.englishKeywords)
+      ? parsed.englishKeywords
+      : fallbackIntent.englishKeywords,
+    searchQueries: Array.isArray(parsed.searchQueries)
+      ? parsed.searchQueries
+      : fallbackIntent.searchQueries
+  };
+};
+
+const toMockProduct = (item: SerpApiImageResult, index: number): MockProduct | null => {
+  const imageUrl = item.original || item.thumbnail;
+  const link = item.link;
+
+  if (!imageUrl || !link) {
+    return null;
+  }
+
+  return {
+    id: `serp-${index}`,
+    name: item.title || "未命名商品",
+    platform: item.source || "Unknown Source",
+    imageUrl,
+    url: link
+  };
+};
+
+const searchSerpApi = async (query: string): Promise<MockProduct[]> => {
+  const apiKey = process.env.SERPAPI_API_KEY;
+  if (!apiKey) {
+    return [];
+  }
+
+  const params = new URLSearchParams({
+    engine: "google_images",
+    q: query,
+    api_key: apiKey,
+    hl: "zh-tw",
+    gl: "tw"
+  });
+
+  const response = await fetch(`https://serpapi.com/search.json?${params.toString()}`, {
+    method: "GET",
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    throw new Error(`SerpAPI request failed: ${response.status}`);
+  }
+
+  const data = (await response.json()) as SerpApiResponse;
+  const items = data.images_results ?? [];
+
+  return items.map(toMockProduct).filter((item): item is MockProduct => item !== null).slice(0, 12);
 };
 
 export async function POST(req: NextRequest) {
@@ -34,7 +108,7 @@ export async function POST(req: NextRequest) {
           {
             role: "system",
             content:
-              "You convert fuzzy shopping descriptions into JSON with fields: features, keywords, englishKeywords. Keep each field as an array of short strings."
+              "Convert the user's fuzzy shopping description into JSON with fields: features, keywords, englishKeywords, searchQueries. Every field must be an array of short strings, and searchQueries should be optimized for image shopping search."
           },
           { role: "user", content: query }
         ]
@@ -42,21 +116,33 @@ export async function POST(req: NextRequest) {
 
       const content = completion.choices[0]?.message?.content;
       if (content) {
-        intent = JSON.parse(content) as SearchIntent;
+        intent = parseIntent(content);
       }
     }
 
-    return NextResponse.json({
-      intent,
-      results: mockProducts
-    });
+    let results = mockProducts;
+    let warning: string | undefined;
+
+    if (process.env.SERPAPI_API_KEY) {
+      const searchQuery = intent.searchQueries[0] || intent.englishKeywords[0] || query;
+      const serpResults = await searchSerpApi(searchQuery);
+      if (serpResults.length > 0) {
+        results = serpResults;
+      } else {
+        warning = "找不到即時圖片結果，已改用預設候選資料。";
+      }
+    } else {
+      warning = "尚未設定 SERPAPI_API_KEY，已使用 mockData。";
+    }
+
+    return NextResponse.json({ intent, results, warning });
   } catch (error) {
     console.error("/api/search error", error);
     return NextResponse.json(
       {
         intent: fallbackIntent,
         results: mockProducts,
-        warning: "AI 解析失敗，已使用預設結果。"
+        warning: "AI 或搜尋流程發生錯誤，已使用預設結果。"
       },
       { status: 200 }
     );

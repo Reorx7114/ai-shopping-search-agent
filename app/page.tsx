@@ -9,6 +9,7 @@ type SearchResponse = {
     features: string[];
     keywords: string[];
     englishKeywords: string[];
+    searchQueries?: string[];
   };
   results: MockProduct[];
   warning?: string;
@@ -86,6 +87,9 @@ export default function HomePage() {
               <p><span className="font-medium">搜尋關鍵字：</span>{data.intent.keywords.join("、")}</p>
               <p><span className="font-medium">英文搜尋詞：</span>{data.intent.englishKeywords.join("、")}</p>
             </div>
+            {data.intent.searchQueries?.length ? (
+              <p><span className="font-medium">搜尋查詢詞：</span>{data.intent.searchQueries.join("、")}</p>
+            ) : null}
             {data.warning && <p className="mt-2 text-xs text-amber-600">{data.warning}</p>}
           </div>
 

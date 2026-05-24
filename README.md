@@ -1,7 +1,7 @@
 # AI Shopping Search Agent MVP
 
 一個以 **Next.js + Tailwind CSS + TypeScript** 打造的極簡購物搜尋 MVP。
-使用者輸入模糊描述後，後端會先透過 OpenAI 解析描述（商品特徵 / 搜尋關鍵字 / 英文搜尋詞），再回傳 mock 候選商品圖片牆。
+使用者輸入模糊描述後，後端會先透過 OpenAI 解析描述（商品特徵 / 搜尋關鍵字 / 英文搜尋詞 / 搜尋查詢詞），再透過 SerpAPI 抓取真實圖片搜尋結果並顯示候選商品圖片牆。
 
 ## 功能概覽
 
@@ -11,11 +11,10 @@
   - 商品特徵
   - 搜尋關鍵字
   - 英文搜尋詞
-- 候選圖片牆（目前使用 mock data）
-  - 商品圖片
-  - 商品名稱
-  - 平台名稱
-  - 比較像這個按鈕
+  - searchQueries
+- 候選圖片牆
+  - 優先使用 SerpAPI 真實圖片結果
+  - 若未設定 SerpAPI，使用 mock data fallback
 
 ## 專案技術
 
@@ -41,12 +40,15 @@ npm install
 cp .env.example .env.local
 ```
 
-填入：
+請在 `.env.local` 設定：
 
-- `OPENAI_API_KEY`：你的 OpenAI API Key
+- `OPENAI_API_KEY`：OpenAI API Key（建議設定，啟用描述解析）
 - `OPENAI_MODEL`：可選，預設 `gpt-4.1-mini`
+- `SERPAPI_API_KEY`：SerpAPI Key（建議設定，啟用真實圖片搜尋）
 
-> 若未設定 API Key，系統仍會使用 fallback intent + mock results 正常展示流程。
+> 若沒有設定 `OPENAI_API_KEY`，系統會使用 fallback intent。
+>
+> 若沒有設定 `SERPAPI_API_KEY`，系統會自動改用 `mockData` 作為候選圖片牆。
 
 ### 3) 啟動開發伺服器
 
@@ -78,6 +80,7 @@ vercel
 
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`（可選）
+- `SERPAPI_API_KEY`
 
 4. 正式部署
 
@@ -93,12 +96,5 @@ vercel --prod
 4. 在 Project Settings → Environment Variables 設定：
    - `OPENAI_API_KEY`
    - `OPENAI_MODEL`（可選）
+   - `SERPAPI_API_KEY`
 5. 點擊 Deploy
-
----
-
-## 後續可擴充（目前尚未實作）
-
-- 串接 Google Shopping / SerpAPI / 電商平台搜尋 API
-- 點「比較像這個」做二次查詢與重排序
-- 價格比對、來源可信度評分
