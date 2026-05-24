@@ -2,27 +2,57 @@
 
 import Image from "next/image";
 import { FormEvent, useState } from "react";
-import type { MockProduct } from "@/mockData";
+
+type Candidate = {
+  id: string;
+  title: string;
+  source: string;
+  image: string;
+  link: string;
+};
 
 type SearchResponse = {
-  intent: {
-    features: string[];
-    keywords: string[];
-    englishKeywords: string[];
-    searchQueries?: string[];
+  features: string[];
+  keywords: string[];
+  englishKeywords: string[];
+  importantClues: string[];
+  excludedTerms: string[];
+  searchQueries: string[];
+  candidates: Candidate[];
+  message: string;
+  isFallback: boolean;
+};
+
+type SearchPayload = {
+  query: string;
+  excludedTerms: string[];
+  feedback?: "none_match";
+  previousIntent?: Pick<
+    SearchResponse,
+    "features" | "keywords" | "englishKeywords" | "importantClues" | "excludedTerms" | "searchQueries"
+  >;
+  selectedCandidate?: {
+    title: string;
+    source: string;
+    link: string;
+    image: string;
   };
-  results: MockProduct[];
-  warning?: string;
 };
 
 export default function HomePage() {
   const [query, setQuery] = useState("");
+  const [excludedInput, setExcludedInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<SearchResponse | null>(null);
   const [error, setError] = useState("");
 
-  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const parseExcludedTerms = (text: string) =>
+    text
+      .split(/[，,、]/g)
+      .map((term) => term.trim())
+      .filter(Boolean);
+
+  const runSearch = async (payload: SearchPayload) => {
     setError("");
     setLoading(true);
 
@@ -30,22 +60,75 @@ export default function HomePage() {
       const response = await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query })
+        body: JSON.stringify(payload)
       });
 
-      const result = (await response.json()) as SearchResponse | { error: string };
+      const result = (await response.json()) as SearchResponse | { message?: string };
       if (!response.ok) {
-        setError((result as { error: string }).error || "搜尋失敗");
-        setData(null);
-      } else {
-        setData(result as SearchResponse);
+        setError((result as { message?: string }).message || "這次搜尋沒有找到合適結果，請換個描述或加入排除條件。");
+        return;
       }
+
+      setData(result as SearchResponse);
     } catch {
-      setError("系統忙碌中，請稍後再試。");
-      setData(null);
+      setError("這次搜尋沒有找到合適結果，請換個描述或加入排除條件。");
     } finally {
       setLoading(false);
     }
+  };
+
+  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    await runSearch({
+      query,
+      excludedTerms: parseExcludedTerms(excludedInput)
+    });
+  };
+
+  const onRefineByCandidate = async (candidate: Candidate) => {
+    if (!data) {
+      return;
+    }
+
+    await runSearch({
+      query,
+      excludedTerms: parseExcludedTerms(excludedInput),
+      selectedCandidate: {
+        title: candidate.title,
+        source: candidate.source,
+        link: candidate.link,
+        image: candidate.image
+      },
+      previousIntent: {
+        features: data.features,
+        keywords: data.keywords,
+        englishKeywords: data.englishKeywords,
+        importantClues: data.importantClues,
+        excludedTerms: data.excludedTerms,
+        searchQueries: data.searchQueries
+      }
+    });
+  };
+
+  const onNoneMatch = async () => {
+    if (!data) {
+      return;
+    }
+
+    await runSearch({
+      query,
+      excludedTerms: parseExcludedTerms(excludedInput),
+      feedback: "none_match",
+      previousIntent: {
+        features: data.features,
+        keywords: data.keywords,
+        englishKeywords: data.englishKeywords,
+        importantClues: data.importantClues,
+        excludedTerms: data.excludedTerms,
+        searchQueries: data.searchQueries
+      }
+    });
   };
 
   return (
@@ -64,6 +147,16 @@ export default function HomePage() {
               className="w-full bg-transparent text-base outline-none placeholder:text-slate-400 sm:text-lg"
             />
           </div>
+
+          <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <input
+              value={excludedInput}
+              onChange={(event) => setExcludedInput(event.target.value)}
+              placeholder="不要出現什麼？例如：正版 LEGO、太貴、塑膠"
+              className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400 sm:text-base"
+            />
+          </div>
+
           <div className="mt-4 flex justify-center">
             <button
               type="submit"
@@ -83,29 +176,52 @@ export default function HomePage() {
           <div className="mb-6 rounded-2xl border border-slate-200 p-4 sm:p-6">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">AI 解析結果</h2>
             <div className="space-y-2 text-sm sm:text-base">
-              <p><span className="font-medium">商品特徵：</span>{data.intent.features.join("、")}</p>
-              <p><span className="font-medium">搜尋關鍵字：</span>{data.intent.keywords.join("、")}</p>
-              <p><span className="font-medium">英文搜尋詞：</span>{data.intent.englishKeywords.join("、")}</p>
+              <p><span className="font-medium">商品特徵：</span>{data.features.join("、")}</p>
+              <p><span className="font-medium">搜尋關鍵字：</span>{data.keywords.join("、")}</p>
+              <p><span className="font-medium">英文搜尋詞：</span>{data.englishKeywords.join("、")}</p>
+              <p><span className="font-medium">重要線索：</span>{data.importantClues.join("、") || "無"}</p>
+              <p><span className="font-medium">排除條件：</span>{data.excludedTerms.join("、") || "無"}</p>
+              <p><span className="font-medium">搜尋查詢：</span>{data.searchQueries.join("、")}</p>
             </div>
-            {data.intent.searchQueries?.length ? (
-              <p><span className="font-medium">搜尋查詢詞：</span>{data.intent.searchQueries.join("、")}</p>
-            ) : null}
-            {data.warning && <p className="mt-2 text-xs text-amber-600">{data.warning}</p>}
+            <p className={`mt-2 text-xs ${data.isFallback ? "text-amber-600" : "text-slate-500"}`}>{data.message}</p>
           </div>
 
-          <h3 className="mb-4 text-lg font-semibold text-slate-800">候選圖片牆</h3>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h3 className="text-lg font-semibold text-slate-800">候選圖片牆</h3>
+            <button
+              onClick={onNoneMatch}
+              disabled={loading}
+              className="rounded-full border border-slate-300 px-4 py-1.5 text-sm text-slate-700 disabled:opacity-50"
+            >
+              這些都不像
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {data.results.map((item) => (
+            {data.candidates.map((item) => (
               <article key={item.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
                 <div className="relative aspect-[4/3] w-full">
-                  <Image src={item.imageUrl} alt={item.name} fill className="object-cover" sizes="(max-width: 640px) 100vw, 33vw"/>
+                  <Image src={item.image} alt={item.title} fill className="object-cover" sizes="(max-width: 640px) 100vw, 33vw" />
                 </div>
                 <div className="space-y-2 p-4">
-                  <p className="line-clamp-2 font-medium text-slate-800">{item.name}</p>
-                  <p className="text-sm text-slate-500">{item.platform}</p>
-                  <div className="flex gap-2">
-                    <a href={item.url} target="_blank" className="rounded-full border border-slate-300 px-3 py-1 text-sm" rel="noreferrer">查看連結</a>
-                    <button className="rounded-full bg-slate-900 px-3 py-1 text-sm text-white">比較像這個</button>
+                  <p className="line-clamp-2 font-medium text-slate-800">{item.title}</p>
+                  <p className="text-sm text-slate-500">{item.source}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <a
+                      href={item.link}
+                      target="_blank"
+                      className="rounded-full border border-slate-300 px-3 py-1 text-sm"
+                      rel="noreferrer"
+                    >
+                      查看連結
+                    </a>
+                    <button
+                      onClick={() => onRefineByCandidate(item)}
+                      disabled={loading}
+                      className="rounded-full bg-slate-900 px-3 py-1 text-sm text-white disabled:opacity-50"
+                    >
+                      比較像這個
+                    </button>
                   </div>
                 </div>
               </article>
