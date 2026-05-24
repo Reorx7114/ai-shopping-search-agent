@@ -1,7 +1,6 @@
 "use client";
 
-import Image from "next/image";
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 
 type Candidate = {
   id: string;
@@ -39,6 +38,39 @@ type SearchPayload = {
   };
 };
 
+const isValidHttpUrl = (value?: string): value is string => {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
+function CandidateImage({ src, alt }: { src?: string; alt: string }) {
+  const [broken, setBroken] = useState(!isValidHttpUrl(src));
+
+  if (broken || !src) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-slate-100 text-sm text-slate-500">
+        圖片無法載入
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="h-full w-full object-cover"
+      loading="lazy"
+      onError={() => setBroken(true)}
+      referrerPolicy="no-referrer"
+    />
+  );
+}
+
 export default function HomePage() {
   const [query, setQuery] = useState("");
   const [excludedInput, setExcludedInput] = useState("");
@@ -65,7 +97,9 @@ export default function HomePage() {
 
       const result = (await response.json()) as SearchResponse | { message?: string };
       if (!response.ok) {
-        setError((result as { message?: string }).message || "這次搜尋沒有找到合適結果，請換個描述或加入排除條件。");
+        setError(
+          (result as { message?: string }).message || "這次搜尋沒有找到合適結果，請換個描述或加入排除條件。"
+        );
         return;
       }
 
@@ -86,10 +120,23 @@ export default function HomePage() {
     });
   };
 
+  const previousIntent = useMemo(
+    () =>
+      data
+        ? {
+            features: data.features,
+            keywords: data.keywords,
+            englishKeywords: data.englishKeywords,
+            importantClues: data.importantClues,
+            excludedTerms: data.excludedTerms,
+            searchQueries: data.searchQueries
+          }
+        : undefined,
+    [data]
+  );
+
   const onRefineByCandidate = async (candidate: Candidate) => {
-    if (!data) {
-      return;
-    }
+    if (!previousIntent) return;
 
     await runSearch({
       query,
@@ -100,43 +147,25 @@ export default function HomePage() {
         link: candidate.link,
         image: candidate.image
       },
-      previousIntent: {
-        features: data.features,
-        keywords: data.keywords,
-        englishKeywords: data.englishKeywords,
-        importantClues: data.importantClues,
-        excludedTerms: data.excludedTerms,
-        searchQueries: data.searchQueries
-      }
+      previousIntent
     });
   };
 
   const onNoneMatch = async () => {
-    if (!data) {
-      return;
-    }
+    if (!previousIntent) return;
 
     await runSearch({
       query,
       excludedTerms: parseExcludedTerms(excludedInput),
       feedback: "none_match",
-      previousIntent: {
-        features: data.features,
-        keywords: data.keywords,
-        englishKeywords: data.englishKeywords,
-        importantClues: data.importantClues,
-        excludedTerms: data.excludedTerms,
-        searchQueries: data.searchQueries
-      }
+      previousIntent
     });
   };
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-6xl px-4 py-10 sm:px-6">
       <section className="mx-auto flex max-w-3xl flex-col items-center pt-8 sm:pt-16">
-        <h1 className="mb-8 text-center text-3xl font-semibold tracking-tight text-slate-800 sm:text-5xl">
-          AI Shopping Search
-        </h1>
+        <h1 className="mb-8 text-center text-3xl font-semibold tracking-tight text-slate-800 sm:text-5xl">AI Shopping Search</h1>
 
         <form className="w-full" onSubmit={onSubmit}>
           <div className="rounded-full border border-slate-200 bg-white px-5 py-3 shadow-sm transition focus-within:shadow-md">
@@ -158,11 +187,7 @@ export default function HomePage() {
           </div>
 
           <div className="mt-4 flex justify-center">
-            <button
-              type="submit"
-              disabled={loading}
-              className="rounded-full bg-slate-900 px-6 py-2 text-sm font-medium text-white disabled:opacity-50"
-            >
+            <button type="submit" disabled={loading} className="rounded-full bg-slate-900 px-6 py-2 text-sm font-medium text-white disabled:opacity-50">
               {loading ? "搜尋中..." : "開始搜尋"}
             </button>
           </div>
@@ -188,11 +213,7 @@ export default function HomePage() {
 
           <div className="mb-4 flex items-center justify-between gap-3">
             <h3 className="text-lg font-semibold text-slate-800">候選圖片牆</h3>
-            <button
-              onClick={onNoneMatch}
-              disabled={loading}
-              className="rounded-full border border-slate-300 px-4 py-1.5 text-sm text-slate-700 disabled:opacity-50"
-            >
+            <button onClick={onNoneMatch} disabled={loading} className="rounded-full border border-slate-300 px-4 py-1.5 text-sm text-slate-700 disabled:opacity-50">
               這些都不像
             </button>
           </div>
@@ -200,26 +221,17 @@ export default function HomePage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {data.candidates.map((item) => (
               <article key={item.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                <div className="relative aspect-[4/3] w-full">
-                  <Image src={item.image} alt={item.title} fill className="object-cover" sizes="(max-width: 640px) 100vw, 33vw" />
+                <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-100">
+                  <CandidateImage src={item.image} alt={item.title} />
                 </div>
                 <div className="space-y-2 p-4">
-                  <p className="line-clamp-2 font-medium text-slate-800">{item.title}</p>
+                  <p className="line-clamp-2 min-h-12 font-medium text-slate-800">{item.title}</p>
                   <p className="text-sm text-slate-500">{item.source}</p>
                   <div className="flex flex-wrap gap-2">
-                    <a
-                      href={item.link}
-                      target="_blank"
-                      className="rounded-full border border-slate-300 px-3 py-1 text-sm"
-                      rel="noreferrer"
-                    >
+                    <a href={item.link} target="_blank" className="rounded-full border border-slate-300 px-3 py-1 text-sm" rel="noreferrer">
                       查看連結
                     </a>
-                    <button
-                      onClick={() => onRefineByCandidate(item)}
-                      disabled={loading}
-                      className="rounded-full bg-slate-900 px-3 py-1 text-sm text-white disabled:opacity-50"
-                    >
+                    <button onClick={() => onRefineByCandidate(item)} disabled={loading} className="rounded-full bg-slate-900 px-3 py-1 text-sm text-white disabled:opacity-50">
                       比較像這個
                     </button>
                   </div>

@@ -52,6 +52,20 @@ type SerpApiResponse = {
   images_results?: SerpApiImageResult[];
 };
 
+
+const isValidHttpImageUrl = (value?: string): value is string => {
+  if (!value) {
+    return false;
+  }
+
+  try {
+    const url = new URL(value);
+    return (url.protocol === "http:" || url.protocol === "https:") && url.hostname.length > 0;
+  } catch {
+    return false;
+  }
+};
+
 const imitationSignals = ["仿", "不是正版", "不是原廠", "類似", "山寨", "平替"];
 const autoNegativeKeywords = ["official", "original", "authentic", "LEGO official", "正版", "原廠"];
 
@@ -113,7 +127,7 @@ const parseIntent = (raw: string, normalizedExcludedTerms: string[], quotedClues
 
 const toCandidate = (item: SerpApiImageResult, index: number): Candidate | null => {
   const image = item.original || item.thumbnail;
-  if (!image || !item.link) {
+  if (!isValidHttpImageUrl(image) || !isValidHttpImageUrl(item.link)) {
     return null;
   }
 
