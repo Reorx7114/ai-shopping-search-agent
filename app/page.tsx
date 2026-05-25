@@ -110,8 +110,8 @@ export default function HomePage() {
       <form className="w-full" onSubmit={onSubmit}>
         <div className="mb-3 flex flex-wrap gap-2">
           {([
-            ["shopping", "找商品"], ["travel", "找旅遊/住宿"], ["inspiration", "找靈感/想法"], ["unsure", "我不確定"]
-          ] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setIntentMode(value)} className={`rounded-full border px-3 py-1 text-sm ${intentMode === value ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 text-slate-700"}`}>{label}</button>)}
+            ["shopping", "找商品"], ["travel", "找旅遊"], ["inspiration", "找靈感"], ["unsure", "我不確定"]
+          ] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setIntentMode(value)} aria-pressed={intentMode === value} className={`rounded-full border px-3 py-1 text-sm transition ${intentMode === value ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 text-slate-700 hover:bg-slate-50"}`}>{label}</button>)}
         </div>
         <div className="rounded-full border border-slate-200 bg-white px-5 py-3 shadow-sm"><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="描述你看到的東西…" className="w-full bg-transparent text-base outline-none placeholder:text-slate-400 sm:text-lg" /></div>
         <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm"><input value={excludedInput} onChange={(e) => setExcludedInput(e.target.value)} placeholder="不要出現什麼？例如：正版 LEGO、太貴、塑膠" className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400 sm:text-base" /></div>

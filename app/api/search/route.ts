@@ -178,6 +178,7 @@ const searchSerp = async (q: string, mode: IntentMode): Promise<Candidate[]> => 
   if (!res.ok) throw new Error(`serp ${res.status}`);
 
   const data = (await res.json()) as SerpApiResponse;
+  // Keep strict Candidate[] output: only push validated candidates (no null union).
   const candidates: Candidate[] = [];
 
   for (const [i, r] of (data.images_results ?? []).entries()) {
