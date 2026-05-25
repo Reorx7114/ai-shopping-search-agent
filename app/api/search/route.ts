@@ -172,17 +172,39 @@ const parseIntent = (raw: string): SearchIntent => {
 const searchSerp = async (q: string, mode: IntentMode): Promise<Candidate[]> => {
   const key = process.env.SERPAPI_API_KEY;
   if (!key) return [];
+
   const params = new URLSearchParams({ engine: "google_images", q, api_key: key, hl: "zh-tw", gl: "tw" });
   const res = await fetch(`https://serpapi.com/search.json?${params.toString()}`, { cache: "no-store" });
   if (!res.ok) throw new Error(`serp ${res.status}`);
+
   const data = (await res.json()) as SerpApiResponse;
-  return (data.images_results ?? []).map((r, i) => {
+  const candidates: Candidate[] = [];
+
+  for (const [i, r] of (data.images_results ?? []).entries()) {
     const image = r.original || r.thumbnail || "";
     const link = r.link || "";
-    if (!isValidHttpUrl(link)) return null;
-    const score = Math.max(0, 40 - i) + (isValidHttpUrl(image) ? 10 : -20) + classifyPenalty(mode, link) + classifyPenalty(mode, image);
-    return { id: `${q}-${i}`, title: r.title || "未命名", source: r.source || "Unknown", image, link, querySource: q, score };
-  }).filter((x): x is Candidate => !!x);
+    if (!isValidHttpUrl(link)) {
+      continue;
+    }
+
+    const score =
+      Math.max(0, 40 - i) +
+      (isValidHttpUrl(image) ? 10 : -20) +
+      classifyPenalty(mode, link) +
+      classifyPenalty(mode, image);
+
+    candidates.push({
+      id: `${q}-${i}`,
+      title: r.title || "未命名",
+      source: r.source || "Unknown",
+      image,
+      link,
+      querySource: q,
+      score
+    });
+  }
+
+  return candidates;
 };
 
 export async function POST(req: NextRequest) {
