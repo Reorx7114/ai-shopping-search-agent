@@ -102,41 +102,57 @@ const classifyPenalty = (mode: IntentMode, url?: string): number => {
 
 const fallbackCandidates: Candidate[] = mockProducts.map((m) => ({ id: m.id, title: m.name, source: m.platform, image: m.imageUrl, link: m.url, querySource: "mock", score: 1 }));
 
+
+const action = (label: string, refinementHint: string, refinementType: RefinementType): RefinementAction => ({
+  label,
+  refinementHint,
+  refinementType
+});
+
 const fallbackIntent: SearchIntent = {
   features: ["商品搜尋"], keywords: ["候選商品"], englishKeywords: ["shopping candidates"], importantClues: [], excludedTerms: [],
   searchQueries: ["shopping toy"], parsedIntent: { productType: "unknown", category: "general", coreClues: [], negativeTerms: [] }
 };
 
 const getActions = (mode: IntentMode, parsed: ParsedIntent): RefinementAction[] => {
-  if (mode === "travel") return [
-    { label: "交通方便", refinementHint: "near transport", refinementType: "local" },
-    { label: "更便宜", refinementHint: "lower budget", refinementType: "local" },
-    { label: "更安靜", refinementHint: "quieter area", refinementType: "local" },
-    { label: "附近要有吃的", refinementHint: "near food options", refinementType: "local" },
-    { label: "換住宿區域", refinementHint: "change area", refinementType: "restart" }
-  ];
-  if (mode === "inspiration") return [
-    { label: "更可愛", refinementHint: "more cute", refinementType: "local" },
-    { label: "更高級", refinementHint: "more premium", refinementType: "local" },
-    { label: "更復古", refinementHint: "more vintage", refinementType: "local" },
-    { label: "更極簡", refinementHint: "more minimal", refinementType: "local" },
-    { label: "換風格", refinementHint: "change style direction", refinementType: "restart" }
-  ];
+  if (mode === "travel") {
+    return [
+      action("交通方便", "near transport", "local"),
+      action("更便宜", "lower budget", "local"),
+      action("更安靜", "quieter area", "local"),
+      action("附近要有吃的", "near food options", "local"),
+      action("換住宿區域", "change area", "restart")
+    ];
+  }
+
+  if (mode === "inspiration") {
+    return [
+      action("更可愛", "more cute", "local"),
+      action("更高級", "more premium", "local"),
+      action("更復古", "more vintage", "local"),
+      action("更極簡", "more minimal", "local"),
+      action("換風格", "change style direction", "restart")
+    ];
+  }
+
   const category = `${parsed.category ?? ""} ${parsed.productType ?? ""}`.toLowerCase();
-  if (category.includes("fashion") || category.includes("accessory")) return [
-    { label: "更可愛", refinementHint: "more cute", refinementType: "local" },
-    { label: "更簡約", refinementHint: "more minimalist", refinementType: "local" },
-    { label: "更韓系", refinementHint: "more korean style", refinementType: "local" },
-    { label: "更正式", refinementHint: "more formal", refinementType: "local" },
-    { label: "換方向", refinementHint: "change direction", refinementType: "restart" }
-  ];
+  if (category.includes("fashion") || category.includes("accessory")) {
+    return [
+      action("更可愛", "more cute", "local"),
+      action("更簡約", "more minimalist", "local"),
+      action("更韓系", "more korean style", "local"),
+      action("更正式", "more formal", "local"),
+      action("換方向", "change direction", "restart")
+    ];
+  }
+
   return [
-    { label: "更便宜", refinementHint: "cheaper", refinementType: "local" },
-    { label: "更高級", refinementHint: "more premium", refinementType: "local" },
-    { label: "更有質感", refinementHint: "better texture quality", refinementType: "local" },
-    { label: "更接近這個", refinementHint: "closer to current branch", refinementType: "local" },
-    { label: "不要這種", refinementHint: "avoid current direction", refinementType: "restart" },
-    { label: "換方向", refinementHint: "change direction", refinementType: "restart" }
+    action("更便宜", "cheaper", "local"),
+    action("更高級", "more premium", "local"),
+    action("更有質感", "better texture quality", "local"),
+    action("更接近這個", "closer to current branch", "local"),
+    action("不要這種", "avoid current direction", "restart"),
+    action("換方向", "change direction", "restart")
   ].slice(0, 6);
 };
 
